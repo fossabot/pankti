@@ -22,11 +22,31 @@
 Vm vm;
 
 // #define DEBUG_STACK
+Module new_module(wchar_t *name) {
+  Module mod;
+  mod.frame_count = 0;
+  mod.path = copy_string(name, wcslen(name));
+  mod.name = mod.path;
+  init_table(&mod.globals);
+
+  return mod;
+}
+
+Module new_module_from_closure(ObjClosure *cls, wchar_t *name) {
+  Module mod = new_module(name);
+  CallFrame *frame = &mod.frames[mod.frame_count++];
+  frame->closure = cls;
+  frame->ip = 0;
+  frame->slots = vm.stack;
+  return mod;
+}
+
+Module *get_current_module() { return &vm.modules[vm.mod_count - 1]; }
 
 void reset_stack() {
   vm.stack_top = vm.stack;
-  vm.frame_count = 0;
-  vm.open_upvs = NULL;
+  // vm.frame_count = 0;
+  //vm.open_upvs = NULL;
 }
 
 void boot_vm() {
@@ -44,15 +64,15 @@ void boot_vm() {
   vm.gray_stack = NULL;
 
   init_table(&vm.strings);
-  init_table(&vm.globals);
-  define_native(L"clock", clock_ntv_fn);
+  // init_table(&vm.globals);
+  //define_native(L"clock", clock_ntv_fn);
 }
 
 void free_vm() {
   // free(vm.last_pop);
   // vm.last_pop = make_nil();
   free_table(&vm.strings);
-  free_table(&vm.globals);
+  // free_table(&vm.globals);
   free_objs();
 }
 
@@ -83,8 +103,8 @@ void runtime_err(wchar_t *format, ...) {
   va_end(args);
   fputwc('\n', stderr);
 
-  for (int i = vm.frame_count - 1; i >= 0; i--) {
-    CallFrame *frm = &vm.frames[i];
+  for (int i = get_current_module()->frame_count - 1; i >= 0; i--) {
+    CallFrame *frm = &get_current_module()->frames[i];
     ObjFunc *fn = frm->closure->func;
     size_t inst = frm->ip - fn->ins.code - 1; // vm.ip - vm.ins->code - 1;
     int line = fn->ins.lines[inst];           // vm.ins->lines[inst];
@@ -99,8 +119,15 @@ void runtime_err(wchar_t *format, ...) {
   reset_stack();
 }
 
-CallFrame *get_cur_farme() { return &vm.frames[vm.frame_count - 1]; }
-uint8_t read_bt() { return *get_cur_farme()->ip++; }
+CallFrame *get_cur_farme() {
+  return &get_current_module()->frames[get_current_module()->frame_count - 1];
+} //&vm.frames[vm.frame_count - 1]; }
+uint8_t read_bt() {
+  uint8_t ins =  *get_cur_farme()->ip++;
+  setlocale(LC_CTYPE, "");
+  //wprintf(L"INS -> %ls\n" , get_single_ins(ins));
+  return ins;
+}
 uint16_t read_u16() {
   CallFrame *cf = get_cur_farme();
   cf->ip += 2;
@@ -236,9 +263,10 @@ void define_stdlib_fn(wchar_t *name, NativeFn func) {
   }
   wprintf(L"--- END STACK ---\n");
 #endif
-  table_set(&vm.globals, get_as_string(k), fn);
-  // pop();
-  // pop();
+  // TODO
+  // table_set(&vm.globals, get_as_string(k), fn);
+  //  pop();
+  //  pop();
 }
 
 Value math_add_stdlib(int argc, Value *args) {
@@ -284,7 +312,10 @@ static bool import_file(wchar_t *import_name) {
 }
 
 IResult run_vm() {
-  CallFrame *frame = &vm.frames[vm.frame_count - 1];
+  CallFrame *frame =
+      &get_current_module()->frames[get_current_module()->frame_count - 1];
+  //&vm.frames[vm.frame_count - 1];
+  
   for (;;) {
 #ifdef DEBUG_STACK
     wprintf(L"------ STACK ----\n");
@@ -303,18 +334,22 @@ IResult run_vm() {
 #endif
     uint8_t ins;
     switch (ins = read_bt()) {
+      //dissm_ins(ins, 0) ;
     case OP_RETURN: {
+
+      return INTRP_OK;
       Value res = pop();
       close_upval(frame->slots);
-      vm.frame_count--;
-      if (vm.frame_count == 0) {
+      get_current_module()->frame_count--;
+      if (get_current_module()->frame_count == 0) {
         pop();
         return INTRP_OK;
       }
 
       vm.stack_top = frame->slots;
       push(res);
-      frame = &vm.frames[vm.frame_count - 1];
+      frame =
+          &get_current_module()->frames[get_current_module()->frame_count - 1];
       break;
       //  print_val(pop());
       //  wprintf(L"\n");
@@ -415,7 +450,7 @@ IResult run_vm() {
       ObjString *nm = read_str_const();
       // wprintf(L"Def global -> %ls\n" , nm->chars);
       // print_val(peek_vm(0));
-      table_set(&vm.globals, nm, peek_vm(0));
+      table_set(&get_current_module()->globals, nm, peek_vm(0));
       pop();
       break;
     }
@@ -425,7 +460,7 @@ IResult run_vm() {
       // print_table(&vm.globals , "global");
       // print_obj();
       Value val;
-      if (!table_get(&vm.globals, name, &val)) {
+      if (!table_get(&get_current_module()->globals, name, &val)) {
         runtime_err(L"Get Global -> Undefined variable '%ls'.", name->chars);
         return INTRP_RUNTIME_ERR;
       }
@@ -435,8 +470,8 @@ IResult run_vm() {
 
     case OP_SET_GLOB: {
       ObjString *name = read_str_const();
-      if (table_set(&vm.globals, name, peek_vm(0))) {
-        table_del(&vm.globals, name);
+      if (table_set(&get_current_module()->globals, name, peek_vm(0))) {
+        table_del(&get_current_module()->globals, name);
         runtime_err(L"Set Global -> Undefined var '%ls'", name->chars);
         return INTRP_RUNTIME_ERR;
       }
@@ -509,7 +544,9 @@ IResult run_vm() {
         return INTRP_RUNTIME_ERR;
       }
 
-      frame = &vm.frames[vm.frame_count - 1];
+      frame =
+          &get_current_module()->frames[get_current_module()->frame_count - 1];
+      //&vm.frames[vm.frame_count - 1];
       break;
     }
     case OP_IMPORT_NONAME: {
@@ -534,11 +571,12 @@ IResult run_vm() {
 }
 
 void close_upval(Value *last) {
-  while (vm.open_upvs != NULL && vm.open_upvs->location >= last) {
-    ObjUpVal *upval = vm.open_upvs;
+  
+  while (get_current_module()->open_upvs != NULL && get_current_module()->open_upvs->location >= last) {
+    ObjUpVal *upval = get_current_module()->open_upvs;
     upval->closed = *upval->location;
     upval->location = &upval->closed;
-    vm.open_upvs = upval->next;
+    get_current_module()->open_upvs = upval->next;
   }
 }
 
@@ -554,14 +592,15 @@ void define_native(wchar_t *name, NativeFn func) {
   }
   wprintf(L"--- END STACK ---\n");
 #endif
-  table_set(&vm.globals, get_as_string(vm.stack[0]), vm.stack[1]);
+  table_set(&get_current_module()->globals, get_as_string(vm.stack[0]),
+            vm.stack[1]);
   pop();
   pop();
 }
 
 ObjUpVal *capture_upv(Value *local) {
   ObjUpVal *prev = NULL;
-  ObjUpVal *upv = vm.open_upvs;
+  ObjUpVal *upv = get_current_module()->open_upvs;
   while (upv != NULL && upv->location > local) {
     prev = upv;
     upv = upv->next;
@@ -574,7 +613,7 @@ ObjUpVal *capture_upv(Value *local) {
   ObjUpVal *new_upv = new_up_val(local);
   new_upv->next = upv;
   if (prev == NULL) {
-    vm.open_upvs = new_upv;
+    get_current_module()->open_upvs = new_upv;
   } else {
     prev->next = new_upv;
   }
@@ -611,12 +650,13 @@ bool call(ObjClosure *closure, int argc) {
     return false;
   }
 
-  if (vm.frame_count == FRAME_SIZE) {
+  if (get_current_module()->frame_count == FRAME_SIZE) {
     runtime_err(L"Too many frames! Stack overflow");
     return false;
   }
 
-  CallFrame *frame = &vm.frames[vm.frame_count++];
+  CallFrame *frame =
+      &get_current_module()->frames[get_current_module()->frame_count++];
   frame->closure = closure;
   frame->ip = closure->func->ins.code;
   frame->slots = vm.stack_top - argc - 1;
@@ -624,11 +664,7 @@ bool call(ObjClosure *closure, int argc) {
 }
 
 IResult interpret(wchar_t *source) {
-  // init_instruction(&ins);
-  //  wprintf(L"COMPILER _> %s" , compile(source, &ins) ? "true" : "false");
-  //  return 0;
 
-  // Instruction ins
   ObjFunc *fn = compile(source);
   if (fn == NULL) {
     return INTRP_COMPILE_ERR;
@@ -638,11 +674,31 @@ IResult interpret(wchar_t *source) {
   ObjClosure *cls = new_closure(fn);
   pop();
   push(make_obj_val(cls));
-  call(cls, 0);
-  // CallFrame *frame = &vm.frames[vm.frame_count++];
+
+  Module new_mod = new_module_from_closure(cls, L"_d_");
+  Module *md = &vm.modules[vm.mod_count++];
+  md->name = new_mod.name;
+  md->frame_count = new_mod.frame_count;
+  // md->frames = new_mod.frames;
+  md->globals = new_mod.globals;
+  md->path = new_mod.path;
+  md->open_upvs = NULL;
+  
+  CallFrame *frame = &md->frames[md->frame_count++];
+  frame->closure = cls;
   // frame->func = fn;
-  // frame->ip = fn->ins.code;
-  // frame->slots = vm.stack;
+  frame->ip = cls->func->ins.code;
+  frame->slots = vm.stack_top - 1;
+  // call(cls, 0);
+  // md = &new_mod;
+  setlocale(LC_CTYPE, "");
+  wprintf(L"cur frame -> %ls\n", new_mod.name->chars);
+
+  // call(cls, 0);
+  //  CallFrame *frame = &vm.frames[vm.frame_count++];
+  //  frame->func = fn;
+  //  frame->ip = fn->ins.code;
+  //  frame->slots = vm.stack;
 
   // if (ins == NULL) {
   //   dissm_ins_chunk(&ins, "BEFORE");

@@ -30,7 +30,7 @@ void *rallc(void *ptr, size_t os, size_t ns) {
     // collect_garbage();
 #endif
     if (vm.bts_allocated > vm.next_gc) {
-      collect_garbage();
+      //collect_garbage();
     }
   }
 
@@ -144,8 +144,8 @@ void mark_roots() {
 #ifdef DEBUG_LOG_GCC
   wprintf(L"marking roots - frame closures -> \n");
 #endif
-  for (int i = 0; i < vm.frame_count; i++) {
-    mark_obj((Obj *)vm.frames[i].closure);
+  for (int i = 0; i < get_current_module()->frame_count; i++) {
+    mark_obj((Obj *)get_current_module()->frames[i].closure);
   }
 
 #ifdef DEBUG_LOG_GCC
@@ -155,7 +155,7 @@ void mark_roots() {
 #ifdef DEBUG_LOG_GCC
   wprintf(L"gc marking open upvalues -> \n");
 #endif
-  for (ObjUpVal *upv = vm.open_upvs; upv != NULL; upv = upv->next) {
+  for (ObjUpVal *upv = get_current_module()->open_upvs; upv != NULL; upv = upv->next) {
     mark_obj((Obj *)upv);
   }
 
@@ -167,7 +167,7 @@ void mark_roots() {
   wprintf(L"gc marking table -> gloals -> \n");
 #endif
 
-  mark_table(&vm.globals);
+  mark_table(&get_current_module()->globals);
 #ifdef DEBUG_LOG_GCC
   wprintf(L"finished marking global table -> \n");
 #endif

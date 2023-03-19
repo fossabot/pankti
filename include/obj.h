@@ -2,6 +2,7 @@
 #define cpank_obj_h
 
 #include "common.h"
+#include "htable.h"
 #include "instruction.h"
 #include "value.h"
 #include <stdbool.h>

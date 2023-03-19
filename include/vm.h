@@ -18,17 +18,33 @@ typedef struct {
   Value *slots;
 } CallFrame;
 
+typedef struct Module {
+  Obj obj;
+  ObjString *path;
+  ObjString *name;
+  CallFrame frames[FRAME_SIZE];
+  int frame_count;
+  Htable globals;
+  ObjUpVal * open_upvs;
+} Module;
+
+Module new_module(wchar_t *name);
+
+#define MAX_MODS 1024
+
 typedef struct {
   Instruction *ins;
   uint8_t *ip;
   Value stack[STACK_SIZE];
   Value *stack_top;
   Htable strings;
-  Htable globals;
+  Module modules[MAX_MODS];
+  int mod_count;
+  // Htable globals;
   Obj *objs;
-  CallFrame frames[FRAME_SIZE];
-  int frame_count;
-  ObjUpVal *open_upvs;
+  // CallFrame frames[FRAME_SIZE];
+  // int frame_count;
+  //ObjUpVal *open_upvs;
   int gray_count;
   int gray_cap;
   Obj **gray_stack;
@@ -47,6 +63,7 @@ extern Vm vm;
 
 void boot_vm();
 void free_vm();
+Module *get_current_module();
 IResult interpret(wchar_t *source);
 void push(Value value);
 Value pop();

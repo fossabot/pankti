@@ -141,3 +141,67 @@ int dissm_ins(Instruction *ins, int offset) {
     return offset + 1;
   }
 }
+
+
+wchar_t * get_single_ins(uint8_t ins) {
+  switch (ins) {
+  case OP_RETURN: return L"OP_RETURN";
+  case OP_NEG: return L"OP_NEG";
+  case OP_IMPORT_NONAME: return L"OP_IMPORT_NONAME";
+  case OP_ADD: return L"OP_ADD";
+  case OP_SUB: return L"OP_SUB";
+    return L"OP_SUB";
+  case OP_MUL:
+    return L"OP_MUL";
+  case OP_DIV:
+    return L"OP_DIV";
+  case OP_CONST:
+    return L"OP_CONST";
+  case OP_NIL:
+    return L"OP_NIL";
+  case OP_TRUE:
+    return L"OP_TRUE";
+  case OP_FALSE:
+    return L"OP_FALSE";
+  case OP_NOT:
+    return L"OP_NOT";
+  case OP_EQ:
+    return L"OP_EQ";
+  case OP_GT:
+    return L"OP_GT";
+  case OP_LT:
+    return L"OP_LT";
+  case OP_SHOW:
+    return L"OP_SHOW";
+  case OP_POP:
+    return L"OP_POP";
+  case OP_DEF_GLOB:
+    return L"OP_DEF_GLOB";
+  case OP_GET_GLOB:
+    return L"OP_GET_GLOB";
+  case OP_SET_GLOB:
+    return L"OP_SET_GLOB";
+  case OP_GET_LOCAL:
+    return L"OP_GET_LOCAL";
+  case OP_SET_LOCAL:
+    return L"OP_SET_LOCAL";
+  case OP_CALL:
+    return L"OP_CALL";
+  case OP_JMP:
+    return L"OP_JMP";
+  case OP_JMP_IF_FALSE:
+    return L"OP_JMP_IF_FALSE";
+  case OP_LOOP:
+    return L"OP_LOOP";
+  case OP_GET_UP:
+    return L"OP_GET_UP";
+  case OP_SET_UP:
+    return L"OP_SET_UP";
+  case OP_CLS_UP:
+    return L"OP_CLS_UPV";
+  case OP_CLOSURE:
+    return L"OP_CLOSURE";
+  default:
+    return L"UKNOWN";
+  }
+}
